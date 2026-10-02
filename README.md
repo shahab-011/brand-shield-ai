@@ -1,88 +1,93 @@
 # BrandShield AI
 
-This project is a React + Vite frontend for a LangGraph-powered script safety analyzer. It includes a modern dark interface, a sample-driven input workspace, and an About page that explains the workflow, the value of LangGraph, and what was learned while building the project.
+BrandShield AI is a React + Vite script safety-review interface with a FastAPI and LangGraph backend. The graph runs independent checks for tone/toxicity, originality/IP risk, and cultural sensitivity, then combines their scores into one report.
 
 ## Stack
 
-- Frontend: React + Vite + Lucide icons
-- Backend API: FastAPI + LangGraph
-- AI provider: Groq via LangChain Groq integration
-- Deployment: Vercel (frontend) + Render (backend)
+- Frontend: React, Vite, and Lucide
+- Backend: FastAPI and LangGraph
+- LLM provider: Groq (optional; configure `GROQ_API_KEY` for LLM-based analysis)
+- Hosting: Netlify (frontend) and Render (backend)
 
-## Local development
+## Run locally
 
-```bash
+Install frontend dependencies once:
+
+```powershell
 npm install
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
-pip install -r requirements.txt
-npm run dev -- --host 0.0.0.0
 ```
 
-Then open the Vite dev server in your browser.
+Start the backend in the first PowerShell terminal:
 
-## Backend service
-
-Start the API locally:
-
-```bash
+```powershell
 .\.venv\Scripts\Activate.ps1
-uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+uvicorn backend.main:app --reload --host 127.0.0.1 --port 8001
 ```
 
-The frontend is configured to call `/api/analyze` through Vite proxy. In production, set `VITE_API_URL` to your Render backend URL.
+Start the frontend in a second terminal:
+
+```powershell
+$env:VITE_API_PROXY_TARGET = "http://127.0.0.1:8001"
+npm run dev -- --host 127.0.0.1 --port 5173 --strictPort
+```
+
+Open <http://localhost:5173/>. The Vite development server proxies `/api` requests to the backend.
+
+## Deploy the backend to Render
+
+1. Push this project to a GitHub repository and create a Render Blueprint from that repository.
+2. Render reads `render.yaml`; the API build installs the lightweight production dependencies from `backend/requirements.txt`.
+3. Set the requested `GROQ_API_KEY` secret in Render. `GROQ_MODEL` and the Python version are defined in the blueprint.
+4. Deploy and wait for the service health check at `/health` to pass.
+5. Copy the service URL, for example `https://brandshield-ai-api.onrender.com`.
+
+The Render service starts with:
+
+```text
+uvicorn backend.main:app --host 0.0.0.0 --port $PORT
+```
+
+## Deploy the frontend to Netlify
+
+1. Import the same GitHub repository in Netlify.
+2. Netlify reads `netlify.toml`; the build command is `npm run build` and the publish directory is `dist`.
+3. Add the Netlify environment variable `VITE_API_URL`, with the full Render endpoint, for example:
+   `https://brandshield-ai-api.onrender.com/api/analyze`
+4. Trigger a fresh Netlify deploy after setting the variable; Vite embeds it during the build.
+5. Copy the deployed production site URL, for example `https://your-site.netlify.app`.
+
+`netlify.toml` also provides the SPA fallback so direct page loads work.
+
+## Connect Netlify to Render
+
+After Netlify has assigned the site URL, set `CORS_ORIGINS` in the Render service environment to the exact Netlify production origin, without a trailing slash. For example:
+
+```text
+https://your-site.netlify.app
+```
+
+For a custom domain, include both origins comma-separated:
+
+```text
+https://your-site.netlify.app,https://brandshield.example
+```
+
+Save the Render environment change and let the service restart. Set this to trusted frontend origins only. The API can be checked at `https://your-render-service.onrender.com/health`.
 
 ## Environment variables
 
-Copy `.env.example` and fill in the values:
+| Variable | Where | Purpose |
+| --- | --- | --- |
+| `GROQ_API_KEY` | Render | Enables Groq-backed analysis; never expose it in frontend variables |
+| `GROQ_MODEL` | Render | Groq model identifier; defaults in `render.yaml` |
+| `CORS_ORIGINS` | Render | Comma-separated exact frontend origins allowed to call the API |
+| `VITE_API_URL` | Netlify | Full `/api/analyze` endpoint on Render, set before frontend build |
+| `VITE_API_PROXY_TARGET` | Local frontend terminal | Backend origin used by the Vite development proxy |
 
-```bash
-copy .env.example .env
+## Build locally
+
+```powershell
+npm run build
 ```
 
-Then add:
-
-- `GROQ_API_KEY` for real LLM analysis
-- `VITE_API_URL` for the deployed Render API URL
-- `VITE_API_PROXY_TARGET` for local proxying during development
-
-## Deployment plan
-
-### Frontend on Vercel
-
-1. Import this repository into Vercel.
-2. Set the framework to Vite.
-3. Set the build command to `npm run build`.
-4. Set the output directory to `dist`.
-5. Add environment variable:
-   - `VITE_API_URL=https://your-render-service.onrender.com/api/analyze`
-
-### Backend on Render
-
-1. Create a Web Service on Render.
-2. Connect this GitHub repo.
-3. Use the `render.yaml` file in the root.
-4. Add environment variable:
-   - `GROQ_API_KEY=your_key_here`
-5. Deploy.
-
-## Production notes
-
-- The frontend includes a graceful fallback mode if the API is unavailable, so the UI still works during demos or early rollout.
-- The API returns a structured `safety_scores` payload that the frontend can render in the report panel.
-- The project is ready for GitHub push and deployment as a two-service setup: frontend on Vercel and backend on Render.
-
-## Git push
-
-After authenticating with GitHub, run:
-
-```bash
-git init
-git branch -M main
-git remote add origin https://github.com/shahab-011/ai-script-writer-1.git
-git add .
-git commit -m "Deploy-ready BrandShield AI frontend and API"
-git push -u origin main
-```
-
-> The project cannot complete the remote GitHub push from this session without your GitHub credentials or a configured token.
+The browser UI has a local heuristic preview fallback if the API cannot be reached. For production AI-based analysis, configure `GROQ_API_KEY` on Render and set the Netlify API URL and Render CORS origin as described above.

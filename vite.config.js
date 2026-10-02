@@ -19,7 +19,6 @@ export default defineConfig({
     strictPort: false,
   },
   optimizeDeps: {
-    noDiscovery: true,
-    include: [],
+    include: ['react', 'react-dom/client', 'lucide-react'],
   },
 });
